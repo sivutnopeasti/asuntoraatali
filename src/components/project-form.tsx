@@ -19,14 +19,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Plus, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { TASK_CATEGORIES, UNIT_LABELS, type TaskUnit, type Material } from "@/lib/types";
@@ -216,152 +208,153 @@ export function ProjectForm() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Määräluettelo (BoQ)</CardTitle>
-            <Button type="button" variant="outline" size="sm" onClick={addTask}>
-              <Plus className="mr-2 h-4 w-4" />
-              Lisää tehtävä
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[160px]">Kategoria</TableHead>
-                  <TableHead>Kuvaus</TableHead>
-                  <TableHead className="w-[200px]">Materiaali</TableHead>
-                  <TableHead className="w-[90px]">Määrä</TableHead>
-                  <TableHead className="w-[90px]">Yksikkö</TableHead>
-                  <TableHead className="w-[50px]" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {tasks.map((task) => {
-                  const categoryMaterials = getMaterialsForCategory(task.category);
-                  const selectedMat = materials.find((m) => m.id === task.materialId);
+      <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
+        <div className="sticky top-16 z-10 flex items-center justify-between rounded-t-lg border-b bg-card px-6 py-4">
+          <CardTitle>Määräluettelo (BoQ) – {tasks.length} tehtävää</CardTitle>
+          <Button type="button" variant="outline" size="sm" onClick={addTask}>
+            <Plus className="mr-2 h-4 w-4" />
+            Lisää tehtävä
+          </Button>
+        </div>
+        <div className="divide-y">
+          {tasks.map((task, index) => {
+            const categoryMaterials = getMaterialsForCategory(task.category);
+            const selectedMat = materials.find((m) => m.id === task.materialId);
 
-                  return (
-                    <TableRow key={task.tempId}>
-                      <TableCell>
-                        <Select
-                          value={task.category}
-                          onValueChange={(v) =>
-                            updateTask(task.tempId, "category", v)
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {TASK_CATEGORIES.map((cat) => (
-                              <SelectItem key={cat.value} value={cat.value}>
-                                {cat.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          placeholder="esim. Asenna parketti"
-                          value={task.description}
-                          onChange={(e) =>
-                            updateTask(task.tempId, "description", e.target.value)
-                          }
-                          required
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Select
-                          value={task.materialId || "__none__"}
-                          onValueChange={(v) =>
-                            selectMaterial(task.tempId, v === "__none__" ? "" : v)
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Valitse..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">
-                              <span className="text-muted-foreground">Ei materiaalia</span>
-                            </SelectItem>
-                            {categoryMaterials.map((mat) => (
-                              <SelectItem key={mat.id} value={mat.id}>
-                                {mat.name}
-                                {mat.unit_price > 0 && (
-                                  <span className="ml-1 text-muted-foreground">
-                                    ({mat.unit_price}€/{UNIT_LABELS[mat.unit as TaskUnit]})
-                                  </span>
-                                )}
-                              </SelectItem>
-                            ))}
-                            {categoryMaterials.length === 0 && (
-                              <SelectItem value="__empty__">
-                                <span className="text-muted-foreground">Ei materiaaleja tälle kategorialle</span>
-                              </SelectItem>
+            return (
+              <div key={task.tempId} className="px-6 py-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-sm font-medium text-muted-foreground">
+                    Tehtävä {index + 1}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeTask(task.tempId)}
+                    disabled={tasks.length === 1}
+                    className="h-8 text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="mr-1 h-3.5 w-3.5" />
+                    Poista
+                  </Button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Kategoria</Label>
+                    <Select
+                      value={task.category}
+                      onValueChange={(v) =>
+                        updateTask(task.tempId, "category", v)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TASK_CATEGORIES.map((cat) => (
+                          <SelectItem key={cat.value} value={cat.value}>
+                            {cat.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-1 lg:col-span-3">
+                    <Label className="text-xs">Tehtävän kuvaus</Label>
+                    <Input
+                      placeholder="esim. Asenna parketti olohuoneeseen"
+                      value={task.description}
+                      onChange={(e) =>
+                        updateTask(task.tempId, "description", e.target.value)
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-xs">Materiaali</Label>
+                    <Select
+                      value={task.materialId || "__none__"}
+                      onValueChange={(v) =>
+                        selectMaterial(task.tempId, v === "__none__" ? "" : v)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Valitse materiaali..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">
+                          <span className="text-muted-foreground">Ei materiaalia</span>
+                        </SelectItem>
+                        {categoryMaterials.map((mat) => (
+                          <SelectItem key={mat.id} value={mat.id}>
+                            {mat.name}
+                            {mat.unit_price > 0 && (
+                              <span className="ml-1 text-muted-foreground">
+                                ({mat.unit_price}€/{UNIT_LABELS[mat.unit as TaskUnit]})
+                              </span>
                             )}
-                          </SelectContent>
-                        </Select>
-                        {selectedMat && (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {selectedMat.manufacturer} – {selectedMat.unit_price}€/{UNIT_LABELS[selectedMat.unit as TaskUnit]}
-                          </p>
+                          </SelectItem>
+                        ))}
+                        {categoryMaterials.length === 0 && (
+                          <SelectItem value="__empty__">
+                            <span className="text-muted-foreground">Ei materiaaleja tälle kategorialle</span>
+                          </SelectItem>
                         )}
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          placeholder="0"
-                          value={task.quantity}
-                          onChange={(e) =>
-                            updateTask(task.tempId, "quantity", e.target.value)
-                          }
-                          required
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Select
-                          value={task.unit}
-                          onValueChange={(v) =>
-                            updateTask(task.tempId, "unit", v)
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="sqm">m²</SelectItem>
-                            <SelectItem value="m">m</SelectItem>
-                            <SelectItem value="unit">kpl</SelectItem>
-                            <SelectItem value="h">h</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeTask(task.tempId)}
-                          disabled={tasks.length === 1}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+                      </SelectContent>
+                    </Select>
+                    {selectedMat && (
+                      <p className="text-xs text-muted-foreground">
+                        {selectedMat.manufacturer} – {selectedMat.unit_price}€/{UNIT_LABELS[selectedMat.unit as TaskUnit]}
+                        {selectedMat.description && ` – ${selectedMat.description}`}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Määrä</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      placeholder="0"
+                      value={task.quantity}
+                      onChange={(e) =>
+                        updateTask(task.tempId, "quantity", e.target.value)
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Yksikkö</Label>
+                    <Select
+                      value={task.unit}
+                      onValueChange={(v) =>
+                        updateTask(task.tempId, "unit", v)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sqm">m²</SelectItem>
+                        <SelectItem value="m">m</SelectItem>
+                        <SelectItem value="unit">kpl</SelectItem>
+                        <SelectItem value="h">h</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="border-t px-6 py-4">
+          <Button type="button" variant="outline" className="w-full" onClick={addTask}>
+            <Plus className="mr-2 h-4 w-4" />
+            Lisää tehtävä
+          </Button>
+        </div>
+      </div>
 
       <div className="flex justify-end">
         <Button type="submit" disabled={saving} size="lg">
