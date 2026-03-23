@@ -9,10 +9,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Kuvaa ei annettu" }, { status: 400 });
     }
 
-    const apiKey = process.env.imgbb_api_key || process.env.IMGBB_API_KEY;
+    const apiKey =
+      process.env.imgbb_api_key ||
+      process.env.IMGBB_API_KEY ||
+      process.env.mgbb_api_key ||
+      process.env.MGBB_API_KEY;
+
     if (!apiKey) {
+      const envKeys = Object.keys(process.env)
+        .filter((k) => k.toLowerCase().includes("imgbb") || k.toLowerCase().includes("mgbb"))
+        .join(", ");
       return NextResponse.json(
-        { error: "ImgBB API-avain puuttuu. Lisää imgbb_api_key Vercelin ympäristömuuttujiin." },
+        {
+          error: `API-avain puuttuu. Löydetyt muuttujat: [${envKeys || "ei yhtään"}]. Lisää imgbb_api_key Vercelin ympäristömuuttujiin ja redeploy.`,
+        },
         { status: 500 }
       );
     }
