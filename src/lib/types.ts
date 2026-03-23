@@ -1,6 +1,7 @@
 export type ProjectStatus = "draft" | "bidding" | "closed";
 export type BidStatus = "draft" | "submitted";
 export type TaskUnit = "sqm" | "m" | "unit" | "h";
+export type ImageType = "photo" | "360";
 
 export interface Project {
   id: string;
@@ -20,6 +21,29 @@ export interface Task {
   quantity: number;
   unit: TaskUnit;
   sort_order: number;
+  material_id: string | null;
+}
+
+export interface Material {
+  id: string;
+  category: string;
+  name: string;
+  manufacturer: string | null;
+  unit_price: number;
+  unit: TaskUnit;
+  description: string | null;
+  image_url: string | null;
+  created_at: string;
+}
+
+export interface ProjectImage {
+  id: string;
+  project_id: string;
+  url: string;
+  type: ImageType;
+  caption: string | null;
+  sort_order: number;
+  created_at: string;
 }
 
 export interface Bid {
@@ -48,6 +72,10 @@ export interface BidWithItems extends Bid {
 
 export interface ProjectWithTasks extends Project {
   tasks: Task[];
+}
+
+export interface TaskWithMaterial extends Task {
+  materials?: Material;
 }
 
 export const TASK_CATEGORIES = [

@@ -5,6 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { Navbar } from "@/components/navbar";
 import { ComparisonMatrix } from "@/components/comparison-matrix";
+import { ImageCarousel } from "@/components/image-carousel";
+import { Viewer360 } from "@/components/viewer-360";
+import { ImageUploader } from "@/components/image-uploader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -31,6 +34,7 @@ import {
   Link2,
   ClipboardList,
   BarChart3,
+  ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -39,6 +43,8 @@ import {
   type Project,
   type Task,
   type BidWithItems,
+  type ProjectImage,
+  type Material,
 } from "@/lib/types";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -68,6 +74,8 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [bids, setBids] = useState<BidWithItems[]>([]);
+  const [images, setImages] = useState<ProjectImage[]>([]);
+  const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
@@ -84,21 +92,30 @@ export default function ProjectDetailPage() {
       return;
     }
 
-    const { data: taskData } = await supabase
-      .from("tasks")
-      .select("*")
-      .eq("project_id", projectId)
-      .order("sort_order", { ascending: true });
-
-    const { data: bidData } = await supabase
-      .from("bids")
-      .select("*, bid_items(*)")
-      .eq("project_id", projectId)
-      .order("created_at", { ascending: true });
+    const [taskResult, bidResult, imageResult, materialResult] = await Promise.all([
+      supabase
+        .from("tasks")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("bids")
+        .select("*, bid_items(*)")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("project_images")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("sort_order", { ascending: true }),
+      supabase.from("materials").select("*"),
+    ]);
 
     setProject(projectData);
-    setTasks(taskData || []);
-    setBids((bidData as BidWithItems[]) || []);
+    setTasks(taskResult.data || []);
+    setBids((bidResult.data as BidWithItems[]) || []);
+    setImages(imageResult.data || []);
+    setMaterials(materialResult.data || []);
     setLoading(false);
   }, [projectId, router, supabase]);
 
@@ -117,7 +134,9 @@ export default function ProjectDetailPage() {
       return;
     }
 
-    setProject((prev) => (prev ? { ...prev, status: newStatus as Project["status"] } : null));
+    setProject((prev) =>
+      prev ? { ...prev, status: newStatus as Project["status"] } : null
+    );
     toast.success(`Status päivitetty: ${STATUS_LABELS[newStatus]}`);
   }
 
@@ -128,6 +147,12 @@ export default function ProjectDetailPage() {
     setCopied(true);
     toast.success("Kutsulinkkii kopioitu leikepöydälle!");
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  function getMaterialName(materialId: string | null): string | null {
+    if (!materialId) return null;
+    const mat = materials.find((m) => m.id === materialId);
+    return mat ? `${mat.name} (${mat.manufacturer || ""})` : null;
   }
 
   if (loading) {
@@ -146,6 +171,8 @@ export default function ProjectDetailPage() {
   if (!project) return null;
 
   const submittedBids = bids.filter((b) => b.status === "submitted");
+  const hasImages = images.length > 0;
+  const has360 = images.some((img) => img.type === "360");
 
   return (
     <>
@@ -216,8 +243,12 @@ export default function ProjectDetailPage() {
           </Card>
         </div>
 
-        <Tabs defaultValue="comparison" className="space-y-6">
+        <Tabs defaultValue={hasImages ? "images" : "comparison"} className="space-y-6">
           <TabsList>
+            <TabsTrigger value="images" className="gap-2">
+              <ImageIcon className="h-4 w-4" />
+              Kuvat ({images.length})
+            </TabsTrigger>
             <TabsTrigger value="comparison" className="gap-2">
               <BarChart3 className="h-4 w-4" />
               Vertailu ({submittedBids.length})
@@ -228,6 +259,23 @@ export default function ProjectDetailPage() {
             </TabsTrigger>
           </TabsList>
 
+          <TabsContent value="images">
+            <div className="space-y-6">
+              {hasImages && (
+                <ImageCarousel images={images} />
+              )}
+
+              {has360 && (
+                <Viewer360 images={images} />
+              )}
+
+              <ImageUploader
+                projectId={projectId}
+                onUploadComplete={loadData}
+              />
+            </div>
+          </TabsContent>
+
           <TabsContent value="comparison">
             <ComparisonMatrix tasks={tasks} bids={bids} />
           </TabsContent>
@@ -237,7 +285,7 @@ export default function ProjectDetailPage() {
               <CardHeader>
                 <CardTitle>Määräluettelo</CardTitle>
                 <CardDescription>
-                  Projektin tehtävät ja niiden määrät
+                  Projektin tehtävät, materiaalit ja niiden määrät
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -246,6 +294,7 @@ export default function ProjectDetailPage() {
                     <TableRow>
                       <TableHead>Kategoria</TableHead>
                       <TableHead>Kuvaus</TableHead>
+                      <TableHead>Materiaali</TableHead>
                       <TableHead className="text-right">Määrä</TableHead>
                       <TableHead>Yksikkö</TableHead>
                     </TableRow>
@@ -260,6 +309,9 @@ export default function ProjectDetailPage() {
                         </TableCell>
                         <TableCell className="font-medium">
                           {task.description}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {getMaterialName(task.material_id) || "–"}
                         </TableCell>
                         <TableCell className="text-right">
                           {task.quantity}

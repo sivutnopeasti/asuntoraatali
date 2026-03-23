@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/table";
 import { Plus, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
-import { TASK_CATEGORIES, type TaskUnit } from "@/lib/types";
+import { TASK_CATEGORIES, UNIT_LABELS, type TaskUnit, type Material } from "@/lib/types";
 
 interface TaskRow {
   tempId: string;
@@ -37,6 +37,7 @@ interface TaskRow {
   description: string;
   quantity: string;
   unit: TaskUnit;
+  materialId: string;
 }
 
 function newTaskRow(): TaskRow {
@@ -46,6 +47,7 @@ function newTaskRow(): TaskRow {
     description: "",
     quantity: "",
     unit: "sqm",
+    materialId: "",
   };
 }
 
@@ -56,6 +58,24 @@ export function ProjectForm() {
   const [totalSqm, setTotalSqm] = useState("");
   const [tasks, setTasks] = useState<TaskRow[]>([newTaskRow()]);
   const [saving, setSaving] = useState(false);
+  const [materials, setMaterials] = useState<Material[]>([]);
+
+  const loadMaterials = useCallback(async () => {
+    const { data } = await supabase
+      .from("materials")
+      .select("*")
+      .order("category")
+      .order("name");
+    setMaterials(data || []);
+  }, [supabase]);
+
+  useEffect(() => {
+    loadMaterials();
+  }, [loadMaterials]);
+
+  function getMaterialsForCategory(category: string): Material[] {
+    return materials.filter((m) => m.category === category);
+  }
 
   function addTask() {
     setTasks([...tasks, newTaskRow()]);
@@ -68,9 +88,29 @@ export function ProjectForm() {
 
   function updateTask(tempId: string, field: keyof TaskRow, value: string) {
     setTasks(
-      tasks.map((t) =>
-        t.tempId === tempId ? { ...t, [field]: value } : t
-      )
+      tasks.map((t) => {
+        if (t.tempId !== tempId) return t;
+        const updated = { ...t, [field]: value };
+        // When category changes, reset material selection
+        if (field === "category") {
+          updated.materialId = "";
+        }
+        return updated;
+      })
+    );
+  }
+
+  function selectMaterial(tempId: string, materialId: string) {
+    const mat = materials.find((m) => m.id === materialId);
+    setTasks(
+      tasks.map((t) => {
+        if (t.tempId !== tempId) return t;
+        return {
+          ...t,
+          materialId,
+          unit: mat ? (mat.unit as TaskUnit) : t.unit,
+        };
+      })
     );
   }
 
@@ -122,6 +162,7 @@ export function ProjectForm() {
         quantity: parseFloat(t.quantity),
         unit: t.unit,
         sort_order: index,
+        material_id: t.materialId || null,
       }));
 
       const { error: tasksError } = await supabase
@@ -190,89 +231,132 @@ export function ProjectForm() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[180px]">Kategoria</TableHead>
+                  <TableHead className="w-[160px]">Kategoria</TableHead>
                   <TableHead>Kuvaus</TableHead>
-                  <TableHead className="w-[100px]">Määrä</TableHead>
-                  <TableHead className="w-[100px]">Yksikkö</TableHead>
-                  <TableHead className="w-[60px]" />
+                  <TableHead className="w-[200px]">Materiaali</TableHead>
+                  <TableHead className="w-[90px]">Määrä</TableHead>
+                  <TableHead className="w-[90px]">Yksikkö</TableHead>
+                  <TableHead className="w-[50px]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {tasks.map((task) => (
-                  <TableRow key={task.tempId}>
-                    <TableCell>
-                      <Select
-                        value={task.category}
-                        onValueChange={(v) =>
-                          updateTask(task.tempId, "category", v)
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {TASK_CATEGORIES.map((cat) => (
-                            <SelectItem key={cat.value} value={cat.value}>
-                              {cat.label}
+                {tasks.map((task) => {
+                  const categoryMaterials = getMaterialsForCategory(task.category);
+                  const selectedMat = materials.find((m) => m.id === task.materialId);
+
+                  return (
+                    <TableRow key={task.tempId}>
+                      <TableCell>
+                        <Select
+                          value={task.category}
+                          onValueChange={(v) =>
+                            updateTask(task.tempId, "category", v)
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {TASK_CATEGORIES.map((cat) => (
+                              <SelectItem key={cat.value} value={cat.value}>
+                                {cat.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          placeholder="esim. Asenna parketti"
+                          value={task.description}
+                          onChange={(e) =>
+                            updateTask(task.tempId, "description", e.target.value)
+                          }
+                          required
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={task.materialId || "__none__"}
+                          onValueChange={(v) =>
+                            selectMaterial(task.tempId, v === "__none__" ? "" : v)
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Valitse..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">
+                              <span className="text-muted-foreground">Ei materiaalia</span>
                             </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        placeholder="esim. Asenna parketti"
-                        value={task.description}
-                        onChange={(e) =>
-                          updateTask(task.tempId, "description", e.target.value)
-                        }
-                        required
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        placeholder="0"
-                        value={task.quantity}
-                        onChange={(e) =>
-                          updateTask(task.tempId, "quantity", e.target.value)
-                        }
-                        required
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Select
-                        value={task.unit}
-                        onValueChange={(v) =>
-                          updateTask(task.tempId, "unit", v)
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="sqm">m²</SelectItem>
-                          <SelectItem value="m">m</SelectItem>
-                          <SelectItem value="unit">kpl</SelectItem>
-                          <SelectItem value="h">h</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeTask(task.tempId)}
-                        disabled={tasks.length === 1}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                            {categoryMaterials.map((mat) => (
+                              <SelectItem key={mat.id} value={mat.id}>
+                                {mat.name}
+                                {mat.unit_price > 0 && (
+                                  <span className="ml-1 text-muted-foreground">
+                                    ({mat.unit_price}€/{UNIT_LABELS[mat.unit as TaskUnit]})
+                                  </span>
+                                )}
+                              </SelectItem>
+                            ))}
+                            {categoryMaterials.length === 0 && (
+                              <SelectItem value="__empty__">
+                                <span className="text-muted-foreground">Ei materiaaleja tälle kategorialle</span>
+                              </SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                        {selectedMat && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {selectedMat.manufacturer} – {selectedMat.unit_price}€/{UNIT_LABELS[selectedMat.unit as TaskUnit]}
+                          </p>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          placeholder="0"
+                          value={task.quantity}
+                          onChange={(e) =>
+                            updateTask(task.tempId, "quantity", e.target.value)
+                          }
+                          required
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={task.unit}
+                          onValueChange={(v) =>
+                            updateTask(task.tempId, "unit", v)
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="sqm">m²</SelectItem>
+                            <SelectItem value="m">m</SelectItem>
+                            <SelectItem value="unit">kpl</SelectItem>
+                            <SelectItem value="h">h</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeTask(task.tempId)}
+                          disabled={tasks.length === 1}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

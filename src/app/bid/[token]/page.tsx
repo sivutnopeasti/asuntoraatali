@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { BidForm } from "@/components/bid-form";
+import { ImageCarousel } from "@/components/image-carousel";
+import { Viewer360 } from "@/components/viewer-360";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -13,7 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Building2, MapPin, Ruler } from "lucide-react";
-import type { Project, Task } from "@/lib/types";
+import type { Project, Task, ProjectImage } from "@/lib/types";
 
 export default function BidPage() {
   const params = useParams();
@@ -21,6 +23,7 @@ export default function BidPage() {
   const supabase = createClient();
   const [project, setProject] = useState<Project | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [images, setImages] = useState<ProjectImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,14 +47,22 @@ export default function BidPage() {
         return;
       }
 
-      const { data: taskData } = await supabase
-        .from("tasks")
-        .select("*")
-        .eq("project_id", projectData.id)
-        .order("sort_order", { ascending: true });
+      const [taskResult, imageResult] = await Promise.all([
+        supabase
+          .from("tasks")
+          .select("*")
+          .eq("project_id", projectData.id)
+          .order("sort_order", { ascending: true }),
+        supabase
+          .from("project_images")
+          .select("*")
+          .eq("project_id", projectData.id)
+          .order("sort_order", { ascending: true }),
+      ]);
 
       setProject(projectData);
-      setTasks(taskData || []);
+      setTasks(taskResult.data || []);
+      setImages(imageResult.data || []);
       setLoading(false);
     }
 
@@ -81,6 +92,9 @@ export default function BidPage() {
   }
 
   if (!project) return null;
+
+  const hasImages = images.length > 0;
+  const has360 = images.some((img) => img.type === "360");
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -117,6 +131,13 @@ export default function BidPage() {
             </div>
           </CardContent>
         </Card>
+
+        {hasImages && (
+          <div className="mb-8 space-y-6">
+            <ImageCarousel images={images} />
+            {has360 && <Viewer360 images={images} />}
+          </div>
+        )}
 
         <BidForm
           projectId={project.id}
