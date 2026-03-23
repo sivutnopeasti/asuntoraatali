@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No image provided" }, { status: 400 });
     }
 
-    const apiKey = process.env.IMGBB_API_KEY;
+    const apiKey = process.env.imgbb_api_key || process.env.IMGBB_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
         { error: "ImgBB API key not configured" },
