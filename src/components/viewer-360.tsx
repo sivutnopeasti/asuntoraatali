@@ -1,12 +1,64 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { Move, Maximize2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ProjectImage } from "@/lib/types";
 
-interface Viewer360Props {
-  images: ProjectImage[];
+declare global {
+  interface Window {
+    pannellum: {
+      viewer: (
+        container: HTMLElement,
+        config: Record<string, unknown>
+      ) => PannellumViewer;
+    };
+  }
+}
+
+interface PannellumViewer {
+  destroy: () => void;
+  getHfov: () => number;
+  setHfov: (hfov: number) => void;
+  getPitch: () => number;
+  getYaw: () => number;
+}
+
+let pannellumLoaded = false;
+let pannellumLoading: Promise<void> | null = null;
+
+function loadPannellum(): Promise<void> {
+  if (pannellumLoaded && window.pannellum) return Promise.resolve();
+  if (pannellumLoading) return pannellumLoading;
+
+  pannellumLoading = new Promise<void>((resolve) => {
+    if (!document.getElementById("pannellum-css")) {
+      const link = document.createElement("link");
+      link.id = "pannellum-css";
+      link.rel = "stylesheet";
+      link.href =
+        "https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css";
+      document.head.appendChild(link);
+    }
+
+    if (window.pannellum) {
+      pannellumLoaded = true;
+      resolve();
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = "pannellum-js";
+    script.src =
+      "https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js";
+    script.onload = () => {
+      pannellumLoaded = true;
+      resolve();
+    };
+    document.head.appendChild(script);
+  });
+
+  return pannellumLoading;
 }
 
 function PanoramaView({
@@ -17,81 +69,77 @@ function PanoramaView({
   className?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const dragStart = useRef({ x: 0, y: 0 });
-  const posStart = useRef({ x: 0, y: 0 });
+  const viewerRef = useRef<PannellumViewer | null>(null);
 
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      setIsDragging(true);
-      dragStart.current = { x: e.clientX, y: e.clientY };
-      posStart.current = { x: position.x, y: position.y };
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    },
-    [position]
-  );
+  useEffect(() => {
+    let cancelled = false;
 
-  const handlePointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (!isDragging) return;
-      const dx = e.clientX - dragStart.current.x;
-      const dy = e.clientY - dragStart.current.y;
-      setPosition({
-        x: posStart.current.x + dx * 0.3,
-        y: Math.max(-60, Math.min(60, posStart.current.y + dy * 0.3)),
+    loadPannellum().then(() => {
+      if (cancelled || !containerRef.current || !window.pannellum) return;
+
+      if (viewerRef.current) {
+        viewerRef.current.destroy();
+      }
+
+      viewerRef.current = window.pannellum.viewer(containerRef.current, {
+        type: "equirectangular",
+        panorama: src,
+        autoLoad: true,
+        autoRotate: -2,
+        autoRotateInactivityDelay: 3000,
+        compass: false,
+        showZoomCtrl: true,
+        showFullscreenCtrl: false,
+        mouseZoom: true,
+        draggable: true,
+        hfov: 100,
+        minHfov: 50,
+        maxHfov: 120,
+        friction: 0.15,
+        yaw: 0,
+        pitch: 0,
       });
-    },
-    [isDragging]
-  );
+    });
 
-  const handlePointerUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
+    return () => {
+      cancelled = true;
+      if (viewerRef.current) {
+        viewerRef.current.destroy();
+        viewerRef.current = null;
+      }
+    };
+  }, [src]);
 
   return (
     <div
       ref={containerRef}
-      className={`relative overflow-hidden ${className}`}
-      style={{ cursor: isDragging ? "grabbing" : "grab" }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-    >
-      <div
-        className="absolute inset-0"
-        style={{
-          backgroundImage: `url(${src})`,
-          backgroundSize: "200% 100%",
-          backgroundPosition: `${50 - position.x}% ${50 - position.y}%`,
-          backgroundRepeat: "repeat-x",
-          transition: isDragging ? "none" : "background-position 0.1s ease-out",
-        }}
-      />
-      <div className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full bg-black/50 px-3 py-1.5 text-xs text-white">
-        <Move className="h-3 w-3" />
-        Raahaa kääntääksesi
-      </div>
-    </div>
+      className={className}
+      style={{ minHeight: "300px" }}
+    />
   );
 }
 
-export function Viewer360({ images }: Viewer360Props) {
+export function Viewer360({ images }: { images: ProjectImage[] }) {
   const panoramas = images.filter((img) => img.type === "360");
   const [activeIndex, setActiveIndex] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
 
+  const closeFullscreen = useCallback(() => setFullscreen(false), []);
+
   useEffect(() => {
-    if (fullscreen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
+    if (!fullscreen) return;
+    document.body.style.overflow = "hidden";
+
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") closeFullscreen();
     }
+    window.addEventListener("keydown", onKey);
+
     return () => {
       document.body.style.overflow = "";
+      window.removeEventListener("keydown", onKey);
     };
-  }, [fullscreen]);
+  }, [fullscreen, closeFullscreen]);
 
   if (panoramas.length === 0) return null;
 
@@ -115,7 +163,7 @@ export function Viewer360({ images }: Viewer360Props) {
 
         <PanoramaView
           src={panoramas[activeIndex].url}
-          className="aspect-[16/9] rounded-lg"
+          className="aspect-[16/9] rounded-lg overflow-hidden"
         />
 
         {panoramas[activeIndex].caption && (
@@ -125,7 +173,7 @@ export function Viewer360({ images }: Viewer360Props) {
         )}
 
         {panoramas.length > 1 && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {panoramas.map((img, i) => (
               <button
                 key={img.id}
@@ -149,7 +197,7 @@ export function Viewer360({ images }: Viewer360Props) {
             variant="ghost"
             size="icon"
             className="absolute right-4 top-4 z-10 text-white hover:bg-white/20"
-            onClick={() => setFullscreen(false)}
+            onClick={closeFullscreen}
           >
             <X className="h-6 w-6" />
           </Button>
