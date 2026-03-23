@@ -43,10 +43,10 @@ export function ImageUploader({ projectId, onUploadComplete }: ImageUploaderProp
       });
       const data = await res.json();
       if (data.url) return data.url;
-      toast.error("Kuvan lataus epäonnistui");
+      toast.error(data.error || "Kuvan lataus epäonnistui");
       return null;
     } catch {
-      toast.error("Kuvan lataus epäonnistui");
+      toast.error("Yhteysvirhe kuvan latauksessa");
       return null;
     }
   }

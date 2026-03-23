@@ -6,13 +6,13 @@ export async function POST(request: NextRequest) {
     const image = formData.get("image") as File;
 
     if (!image) {
-      return NextResponse.json({ error: "No image provided" }, { status: 400 });
+      return NextResponse.json({ error: "Kuvaa ei annettu" }, { status: 400 });
     }
 
     const apiKey = process.env.imgbb_api_key || process.env.IMGBB_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { error: "ImgBB API key not configured" },
+        { error: "ImgBB API-avain puuttuu. Lisää imgbb_api_key Vercelin ympäristömuuttujiin." },
         { status: 500 }
       );
     }
@@ -20,10 +20,9 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await image.arrayBuffer());
     const base64 = buffer.toString("base64");
 
-    const imgbbForm = new URLSearchParams();
+    const imgbbForm = new FormData();
     imgbbForm.append("key", apiKey);
     imgbbForm.append("image", base64);
-    imgbbForm.append("name", image.name.replace(/\.[^.]+$/, ""));
 
     const response = await fetch("https://api.imgbb.com/1/upload", {
       method: "POST",
@@ -33,22 +32,17 @@ export async function POST(request: NextRequest) {
     const result = await response.json();
 
     if (!result.success) {
-      return NextResponse.json(
-        { error: "Upload failed" },
-        { status: 500 }
-      );
+      const errMsg = result.error?.message || "ImgBB upload failed";
+      return NextResponse.json({ error: errMsg }, { status: 500 });
     }
 
     return NextResponse.json({
       url: result.data.url,
       display_url: result.data.display_url,
       thumb_url: result.data.thumb?.url,
-      delete_url: result.data.delete_url,
     });
-  } catch {
-    return NextResponse.json(
-      { error: "Upload failed" },
-      { status: 500 }
-    );
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Tuntematon virhe";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
