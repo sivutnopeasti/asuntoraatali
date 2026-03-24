@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
-import { Home, LogOut, Plus, BookOpen } from "lucide-react";
+import { Home, LogOut, Plus, BookOpen, View } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export function Navbar() {
@@ -38,6 +38,12 @@ export function Navbar() {
               <Button variant="ghost" size="sm">
                 <BookOpen className="mr-2 h-4 w-4" />
                 Materiaalit
+              </Button>
+            </Link>
+            <Link href="/tours">
+              <Button variant="ghost" size="sm">
+                <View className="mr-2 h-4 w-4" />
+                Kierrokset
               </Button>
             </Link>
             <Link href="/projects/new">

@@ -78,6 +78,29 @@ export interface TaskWithMaterial extends Task {
   materials?: Material;
 }
 
+export interface Room {
+  id: string;
+  project_id: string;
+  name: string;
+  sort_order: number;
+  original_image_url: string | null;
+  visualized_image_url: string | null;
+  created_at: string;
+}
+
+export interface RoomHotspot {
+  id: string;
+  room_id: string;
+  target_room_id: string;
+  pitch: number;
+  yaw: number;
+  label: string | null;
+}
+
+export interface RoomWithHotspots extends Room {
+  room_hotspots: RoomHotspot[];
+}
+
 export const TASK_CATEGORIES = [
   { value: "flooring", label: "Lattia" },
   { value: "painting", label: "Maalaus" },
