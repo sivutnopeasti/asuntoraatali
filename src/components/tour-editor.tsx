@@ -38,7 +38,7 @@ interface TourEditorProps {
   onUpdate: () => void;
 }
 
-function compressImage(file: File, maxSizeMB = 3.5): Promise<File> {
+function compressImage(file: File, maxSizeMB = 25): Promise<File> {
   return new Promise((resolve) => {
     if (file.size <= maxSizeMB * 1024 * 1024) {
       resolve(file);
@@ -49,27 +49,20 @@ function compressImage(file: File, maxSizeMB = 3.5): Promise<File> {
     const url = URL.createObjectURL(file);
     img.onload = () => {
       URL.revokeObjectURL(url);
-      const MAX_DIM = 6144;
-      let { width, height } = img;
-      if (width > MAX_DIM || height > MAX_DIM) {
-        const ratio = Math.min(MAX_DIM / width, MAX_DIM / height);
-        width = Math.round(width * ratio);
-        height = Math.round(height * ratio);
-      }
       const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = img.width;
+      canvas.height = img.height;
       const ctx = canvas.getContext("2d")!;
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(img, 0, 0, width, height);
+      ctx.drawImage(img, 0, 0, img.width, img.height);
 
-      let quality = 0.85;
+      let quality = 0.95;
       const tryCompress = () => {
         canvas.toBlob(
           (blob) => {
             if (!blob) { resolve(file); return; }
-            if (blob.size > maxSizeMB * 1024 * 1024 && quality > 0.3) {
+            if (blob.size > maxSizeMB * 1024 * 1024 && quality > 0.7) {
               quality -= 0.05;
               tryCompress();
             } else {

@@ -32,11 +32,7 @@ export function ImageUploader({ projectId, onUploadComplete }: ImageUploaderProp
   const [pendingImages, setPendingImages] = useState<UploadedImage[]>([]);
   const [uploadType, setUploadType] = useState<ImageType>("photo");
 
-  function compressImage(
-    file: File,
-    is360: boolean,
-    maxSizeMB = 4
-  ): Promise<File> {
+  function compressImage(file: File, maxSizeMB = 25): Promise<File> {
     return new Promise((resolve) => {
       if (file.size <= maxSizeMB * 1024 * 1024) {
         resolve(file);
@@ -47,41 +43,24 @@ export function ImageUploader({ projectId, onUploadComplete }: ImageUploaderProp
       const url = URL.createObjectURL(file);
       img.onload = () => {
         URL.revokeObjectURL(url);
-
-        const MAX_DIM = is360 ? 8192 : 4096;
-        let { width, height } = img;
-        if (width > MAX_DIM || height > MAX_DIM) {
-          const ratio = Math.min(MAX_DIM / width, MAX_DIM / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-        }
-
         const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
+        canvas.width = img.width;
+        canvas.height = img.height;
         const ctx = canvas.getContext("2d")!;
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
-        ctx.drawImage(img, 0, 0, width, height);
+        ctx.drawImage(img, 0, 0, img.width, img.height);
 
-        let quality = is360 ? 0.92 : 0.85;
-        const minQuality = is360 ? 0.5 : 0.3;
+        let quality = 0.95;
         const tryCompress = () => {
           canvas.toBlob(
             (blob) => {
-              if (!blob) {
-                resolve(file);
-                return;
-              }
-              if (blob.size > maxSizeMB * 1024 * 1024 && quality > minQuality) {
+              if (!blob) { resolve(file); return; }
+              if (blob.size > maxSizeMB * 1024 * 1024 && quality > 0.7) {
                 quality -= 0.05;
                 tryCompress();
               } else {
-                const compressed = new File([blob], file.name, {
-                  type: "image/jpeg",
-                  lastModified: Date.now(),
-                });
-                resolve(compressed);
+                resolve(new File([blob], file.name, { type: "image/jpeg", lastModified: Date.now() }));
               }
             },
             "image/jpeg",
@@ -90,25 +69,47 @@ export function ImageUploader({ projectId, onUploadComplete }: ImageUploaderProp
         };
         tryCompress();
       };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        resolve(file);
-      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
       img.src = url;
     });
   }
 
-  async function uploadToImgBB(file: File, is360: boolean): Promise<string | null> {
+  async function uploadToImgBB(file: File): Promise<string | null> {
     try {
-      const compressed = await compressImage(file, is360);
+      toast.info("Valmistellaan kuvaa...");
+      const compressed = await compressImage(file);
+
+      let apiKey: string | null = null;
+      try {
+        const keyRes = await fetch("/api/upload", {
+          method: "POST",
+          headers: { "X-Get-Key": "1" },
+        });
+        const keyData = await keyRes.json();
+        apiKey = keyData.key;
+      } catch { /* ignore */ }
+
+      if (apiKey) {
+        const imgbbForm = new FormData();
+        imgbbForm.append("key", apiKey);
+        imgbbForm.append("image", compressed);
+        const res = await fetch("https://api.imgbb.com/1/upload", {
+          method: "POST",
+          body: imgbbForm,
+        });
+        const data = await res.json();
+        if (data?.data?.url) return data.data.url;
+      }
+
       const formData = new FormData();
       formData.append("image", compressed);
-
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); } catch {
+        toast.error("Kuva on liian suuri. Pienennä kuvaa ensin.");
+        return null;
+      }
       if (data.url) return data.url;
       toast.error(data.error || "Kuvan lataus epäonnistui");
       return null;
@@ -135,8 +136,7 @@ export function ImageUploader({ projectId, onUploadComplete }: ImageUploaderProp
         continue;
       }
 
-      toast.info(`Pakataan ${file.name}...`);
-      const url = await uploadToImgBB(file, uploadType === "360");
+      const url = await uploadToImgBB(file);
       if (url) {
         setPendingImages((prev) => [
           ...prev,
