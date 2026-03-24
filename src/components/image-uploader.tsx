@@ -32,7 +32,11 @@ export function ImageUploader({ projectId, onUploadComplete }: ImageUploaderProp
   const [pendingImages, setPendingImages] = useState<UploadedImage[]>([]);
   const [uploadType, setUploadType] = useState<ImageType>("photo");
 
-  function compressImage(file: File, maxSizeMB = 4): Promise<File> {
+  function compressImage(
+    file: File,
+    is360: boolean,
+    maxSizeMB = 4
+  ): Promise<File> {
     return new Promise((resolve) => {
       if (file.size <= maxSizeMB * 1024 * 1024) {
         resolve(file);
@@ -44,7 +48,7 @@ export function ImageUploader({ projectId, onUploadComplete }: ImageUploaderProp
       img.onload = () => {
         URL.revokeObjectURL(url);
 
-        const MAX_DIM = 4096;
+        const MAX_DIM = is360 ? 8192 : 4096;
         let { width, height } = img;
         if (width > MAX_DIM || height > MAX_DIM) {
           const ratio = Math.min(MAX_DIM / width, MAX_DIM / height);
@@ -56,15 +60,21 @@ export function ImageUploader({ projectId, onUploadComplete }: ImageUploaderProp
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext("2d")!;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
         ctx.drawImage(img, 0, 0, width, height);
 
-        let quality = 0.85;
+        let quality = is360 ? 0.92 : 0.85;
+        const minQuality = is360 ? 0.5 : 0.3;
         const tryCompress = () => {
           canvas.toBlob(
             (blob) => {
-              if (!blob) { resolve(file); return; }
-              if (blob.size > maxSizeMB * 1024 * 1024 && quality > 0.3) {
-                quality -= 0.1;
+              if (!blob) {
+                resolve(file);
+                return;
+              }
+              if (blob.size > maxSizeMB * 1024 * 1024 && quality > minQuality) {
+                quality -= 0.05;
                 tryCompress();
               } else {
                 const compressed = new File([blob], file.name, {
@@ -88,9 +98,9 @@ export function ImageUploader({ projectId, onUploadComplete }: ImageUploaderProp
     });
   }
 
-  async function uploadToImgBB(file: File): Promise<string | null> {
+  async function uploadToImgBB(file: File, is360: boolean): Promise<string | null> {
     try {
-      const compressed = await compressImage(file);
+      const compressed = await compressImage(file, is360);
       const formData = new FormData();
       formData.append("image", compressed);
 
@@ -126,7 +136,7 @@ export function ImageUploader({ projectId, onUploadComplete }: ImageUploaderProp
       }
 
       toast.info(`Pakataan ${file.name}...`);
-      const url = await uploadToImgBB(file);
+      const url = await uploadToImgBB(file, uploadType === "360");
       if (url) {
         setPendingImages((prev) => [
           ...prev,
