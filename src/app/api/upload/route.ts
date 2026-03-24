@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
   try {
+    if (request.headers.get("X-Get-Key") === "1") {
+      const apiKey =
+        process.env.imgbb_api_key ||
+        process.env.IMGBB_API_KEY ||
+        process.env.mgbb_api_key ||
+        process.env.MGBB_API_KEY;
+      if (apiKey) {
+        return NextResponse.json({ key: apiKey });
+      }
+      return NextResponse.json({ error: "API key not configured" }, { status: 500 });
+    }
+
     const formData = await request.formData();
     const image = formData.get("image") as File;
 

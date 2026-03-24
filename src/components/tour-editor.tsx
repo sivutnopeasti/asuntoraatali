@@ -91,15 +91,39 @@ async function uploadToImgBB(file: File): Promise<string | null> {
   try {
     toast.info("Pakataan kuvaa...");
     const compressed = await compressImage(file);
+
     const formData = new FormData();
     formData.append("image", compressed);
+
+    let apiKey: string | null = null;
+    try {
+      const keyRes = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "X-Get-Key": "1" },
+      });
+      const keyData = await keyRes.json();
+      apiKey = keyData.key;
+    } catch { /* ignore */ }
+
+    if (apiKey) {
+      const imgbbForm = new FormData();
+      imgbbForm.append("key", apiKey);
+      imgbbForm.append("image", compressed);
+      const res = await fetch("https://api.imgbb.com/1/upload", {
+        method: "POST",
+        body: imgbbForm,
+      });
+      const data = await res.json();
+      if (data?.data?.url) return data.data.url;
+    }
+
     const res = await fetch("/api/upload", { method: "POST", body: formData });
     const text = await res.text();
     let data;
     try {
       data = JSON.parse(text);
     } catch {
-      toast.error("Kuva on liian suuri palvelimelle. Pienennä kuvaa ensin.");
+      toast.error("Kuva on liian suuri. Pienennä kuvaa ensin.");
       return null;
     }
     if (data.url) return data.url;
