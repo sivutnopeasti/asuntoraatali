@@ -38,7 +38,7 @@ interface TourEditorProps {
   onUpdate: () => void;
 }
 
-function compressImage(file: File, maxSizeMB = 4): Promise<File> {
+function compressImage(file: File, maxSizeMB = 3.5): Promise<File> {
   return new Promise((resolve) => {
     if (file.size <= maxSizeMB * 1024 * 1024) {
       resolve(file);
@@ -49,7 +49,7 @@ function compressImage(file: File, maxSizeMB = 4): Promise<File> {
     const url = URL.createObjectURL(file);
     img.onload = () => {
       URL.revokeObjectURL(url);
-      const MAX_DIM = 8192;
+      const MAX_DIM = 6144;
       let { width, height } = img;
       if (width > MAX_DIM || height > MAX_DIM) {
         const ratio = Math.min(MAX_DIM / width, MAX_DIM / height);
@@ -64,12 +64,12 @@ function compressImage(file: File, maxSizeMB = 4): Promise<File> {
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(img, 0, 0, width, height);
 
-      let quality = 0.92;
+      let quality = 0.85;
       const tryCompress = () => {
         canvas.toBlob(
           (blob) => {
             if (!blob) { resolve(file); return; }
-            if (blob.size > maxSizeMB * 1024 * 1024 && quality > 0.5) {
+            if (blob.size > maxSizeMB * 1024 * 1024 && quality > 0.3) {
               quality -= 0.05;
               tryCompress();
             } else {
@@ -89,11 +89,19 @@ function compressImage(file: File, maxSizeMB = 4): Promise<File> {
 
 async function uploadToImgBB(file: File): Promise<string | null> {
   try {
+    toast.info("Pakataan kuvaa...");
     const compressed = await compressImage(file);
     const formData = new FormData();
     formData.append("image", compressed);
     const res = await fetch("/api/upload", { method: "POST", body: formData });
-    const data = await res.json();
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      toast.error("Kuva on liian suuri palvelimelle. Pienennä kuvaa ensin.");
+      return null;
+    }
     if (data.url) return data.url;
     toast.error(data.error || "Kuvan lataus epäonnistui");
     return null;
