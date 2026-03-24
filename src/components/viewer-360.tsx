@@ -100,8 +100,7 @@ function PanoramaView({
         type: "equirectangular",
         panorama: src,
         autoLoad: true,
-        autoRotate: -2,
-        autoRotateInactivityDelay: 3000,
+        autoRotate: false,
         compass: false,
         showZoomCtrl: false,
         showFullscreenCtrl: false,
@@ -284,7 +283,7 @@ export function Viewer360({ images }: { images: ProjectImage[] }) {
 
         <PanoramaView
           src={panoramas[activeIndex].url}
-          className="aspect-[16/9] rounded-lg overflow-hidden"
+          className="aspect-[2/1] max-h-[400px] rounded-lg overflow-hidden"
           showControls
         />
 
